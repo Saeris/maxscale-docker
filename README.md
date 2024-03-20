@@ -1,90 +1,61 @@
-# MariaDB MaxScale Docker image
+# MaxScale Docker Sharded Database
 
-This Docker image runs the latest 2.4 version of MariaDB MaxScale.
-
--	[Travis CI:  
-	![build status badge](https://img.shields.io/travis/mariadb-corporation/maxscale-docker/master.svg)](https://travis-ci.org/mariadb-corporation/maxscale-docker/branches)
+This is an example of a sharded database using MariaDB and MaxScale. It uses `docker-compose` to setup all of the various services involved and comes with some sample data and a python script to test the database.
 
 ## Running
-[The MaxScale docker-compose setup](./docker-compose.yml) contains MaxScale
-configured with a three node master-slave cluster. To start it, run the
-following commands in this directory.
 
-```
+To start the cluster, run the following commands in the project root:
+
+```bash
 docker-compose build
 docker-compose up -d
 ```
 
-After MaxScale and the servers have started (takes a few minutes), you can find
-the readwritesplit router on port 4006 and the readconnroute on port 4008. The
-user `maxuser` with the password `maxpwd` can be used to test the cluster.
-Assuming the mariadb client is installed on the host machine:
-```
-$ mysql -umaxuser -pmaxpwd -h 127.0.0.1 -P 4006 test
-Welcome to the MariaDB monitor.  Commands end with ; or \g.
-Your MySQL connection id is 5
-Server version: 10.2.12 2.2.9-maxscale mariadb.org binary distribution
+It will take a moment for the server to start and be fully available. You can check the status of the database cluster by running the following:
 
-Copyright (c) 2000, 2018, Oracle, MariaDB Corporation Ab and others.
-
-Type 'help;' or '\h' for help. Type '\c' to clear the current input statement.
-
-MySQL [test]>
-```
-You can edit the [`maxscale.cnf.d/example.cnf`](./maxscale.cnf.d/example.cnf)
-file and recreate the MaxScale container to change the configuration.
-
-To stop the containers, execute the following command. Optionally, use the -v
-flag to also remove the volumes.
-
-To run maxctrl in the container to see the status of the cluster:
-```
-$ docker-compose exec maxscale maxctrl list servers
-┌─────────┬─────────┬──────┬─────────────┬─────────────────┬──────────┐
-│ Server  │ Address │ Port │ Connections │ State           │ GTID     │
-├─────────┼─────────┼──────┼─────────────┼─────────────────┼──────────┤
-│ server1 │ master  │ 3306 │ 0           │ Master, Running │ 0-3000-5 │
-├─────────┼─────────┼──────┼─────────────┼─────────────────┼──────────┤
-│ server2 │ slave1  │ 3306 │ 0           │ Slave, Running  │ 0-3000-5 │
-├─────────┼─────────┼──────┼─────────────┼─────────────────┼──────────┤
-│ server3 │ slave2  │ 3306 │ 0           │ Running         │ 0-3000-5 │
-└─────────┴─────────┴──────┴─────────────┴─────────────────┴──────────┘
-
+```bash
+docker-compose exec maxscale maxctrl list servers
 ```
 
-The cluster is configured to utilize automatic failover. To illustrate this you can stop the master
-container and watch for maxscale to failover to one of the original slaves and then show it rejoining
-after recovery:
-```
-$ docker-compose stop master
-Stopping maxscaledocker_master_1 ... done
-$ docker-compose exec maxscale maxctrl list servers
-┌─────────┬─────────┬──────┬─────────────┬─────────────────┬─────────────┐
-│ Server  │ Address │ Port │ Connections │ State           │ GTID        │
-├─────────┼─────────┼──────┼─────────────┼─────────────────┼─────────────┤
-│ server1 │ master  │ 3306 │ 0           │ Down            │ 0-3000-5    │
-├─────────┼─────────┼──────┼─────────────┼─────────────────┼─────────────┤
-│ server2 │ slave1  │ 3306 │ 0           │ Master, Running │ 0-3001-7127 │
-├─────────┼─────────┼──────┼─────────────┼─────────────────┼─────────────┤
-│ server3 │ slave2  │ 3306 │ 0           │ Slave, Running  │ 0-3001-7127 │
-└─────────┴─────────┴──────┴─────────────┴─────────────────┴─────────────┘
-$ docker-compose start master
-Starting master ... done
-$ docker-compose exec maxscale maxctrl list servers
-┌─────────┬─────────┬──────┬─────────────┬─────────────────┬─────────────┐
-│ Server  │ Address │ Port │ Connections │ State           │ GTID        │
-├─────────┼─────────┼──────┼─────────────┼─────────────────┼─────────────┤
-│ server1 │ master  │ 3306 │ 0           │ Slave, Running  │ 0-3001-7127 │
-├─────────┼─────────┼──────┼─────────────┼─────────────────┼─────────────┤
-│ server2 │ slave1  │ 3306 │ 0           │ Master, Running │ 0-3001-7127 │
-├─────────┼─────────┼──────┼─────────────┼─────────────────┼─────────────┤
-│ server3 │ slave2  │ 3306 │ 0           │ Slave, Running  │ 0-3001-7127 │
-└─────────┴─────────┴──────┴─────────────┴─────────────────┴─────────────┘
+A successful result will look something like this:
 
+```bash
+┌────────┬─────────┬──────┬─────────────┬─────────────────┬───────────┬─────────────────┐
+│ Server │ Address │ Port │ Connections │ State           │ GTID      │ Monitor         │
+├────────┼─────────┼──────┼─────────────┼─────────────────┼───────────┼─────────────────┤
+│ shard1 │ shard1  │ 3306 │ 0           │ Master, Running │ 0-3001-59 │ MariaDB-Monitor │
+├────────┼─────────┼──────┼─────────────┼─────────────────┼───────────┼─────────────────┤
+│ shard2 │ shard2  │ 3306 │ 0           │ Running         │ 0-3002-4  │ MariaDB-Monitor │
+└────────┴─────────┴──────┴─────────────┴─────────────────┴───────────┴─────────────────┘
 ```
 
-Once complete, to remove the cluster and maxscale containers:
+Befoe you can run the Python script, you will need to seed the database with the included zipcode data in the `sql/` directory. To do this, you can use phpMyAdmin, which will be running on [http://localhost:8080](http://localhost:8080). You can use the same login credentials as the MaxScale cluster is configured with: `maxuser` and `maxpwd` to login to phpMyAdmin. From there, navigate to the Import wizard and upload both `sql/zipcodes_one.sql` and `sql/zipcodes_two.sql` one at a time.
 
+You will then need to run some first-time setup for Python. I recommend using [`uv`](https://astral.sh/blog/uv) for this. The following commands should be all you need running in a Linux dev environment:
+
+Setup the virtual environment:
+```bash
+uv venv
 ```
+
+Activate the virtual environment (command varies per host OS):
+```bash
+source .venv/bin/activate
+```
+
+Install required packages:
+```bash
+uv pip install -r requirements.txt
+```
+
+Finally, you can run `app.py`:
+
+```bash
+python app.py
+```
+
+To shut down the cluster, run the following:
+
+```bash
 docker-compose down -v
 ```
